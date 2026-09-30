@@ -1,0 +1,20 @@
+/*
+ * NEXORA Support — reset globale.
+ * Il tema dark/viola e il layout sono gestiti in App.css.
+ */
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, Arial, sans-serif;
+  background: #0b0d12;
+  color: #f5f7fa;
+  -webkit-font-smoothing: antialiased;
+}
