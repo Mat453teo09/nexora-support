@@ -1294,6 +1294,117 @@ button.conversation.selected {
   margin-top: 4px;
 }
 
+/* ================= STATISTICHE ================= */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 30px;
+}
+
+.stats-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid #242832;
+  border-radius: 12px;
+  background: #11141b;
+}
+
+.stats-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #211b30;
+  color: #a970ff;
+  flex-shrink: 0;
+}
+
+.stats-label {
+  display: block;
+  color: #717886;
+  font-size: 10px;
+}
+
+.stats-value {
+  display: block;
+  margin: 4px 0 3px;
+  font-size: 21px;
+}
+
+.stats-detail {
+  color: #565d6b;
+  font-size: 9px;
+}
+
+.stats-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: #9da3af;
+  font-size: 14px;
+}
+
+.stats-table-card {
+  max-width: 760px;
+  border: 1px solid #242832;
+  border-radius: 12px;
+  background: #11141b;
+  overflow: hidden;
+}
+
+.stats-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 18px;
+  border-top: 1px solid #1b1f27;
+}
+
+.stats-row:first-child {
+  border-top: 0;
+}
+
+.stats-row strong {
+  font-size: 13px;
+}
+
+.stats-row .status-chip {
+  font-size: 8px;
+  padding: 2px 6px;
+}
+
+.stats-row-values {
+  display: flex;
+  gap: 18px;
+  margin-left: auto;
+  color: #717886;
+  font-size: 11px;
+}
+
+.stats-row-values strong {
+  color: #b17aff;
+  font-size: 12px;
+}
+
+.stats-empty-hint {
+  margin-top: 16px;
+  color: #565d6b;
+  font-size: 11px;
+}
+
+@media (max-width: 1200px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* ================= HIGHLIGHT PANNELLO CLIENTE ================= */
 
 .customer-panel.highlighted {
@@ -1830,11 +1941,118 @@ button.conversation.selected {
   background: #6d28d9;
 }
 
-@media (max-width: 520px) {
-  .client-chat {
+@media (max-width: 520px) {  .client-chat {
     width: 100%;
     height: 100vh;
     border: 0;
     border-radius: 0;
   }
+}
+
+/* ================= SYNC CLOUD (IMPOSTAZIONI) ================= */
+
+.remote-card {
+  border-color: #3d2a5e;
+  background: linear-gradient(135deg, #141021 0%, #11141b 60%);
+}
+
+.remote-body {
+  width: 100%;
+}
+
+.remote-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 4px 0 12px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.remote-status.online {
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+}
+
+.remote-status.connecting {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.remote-status.error {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+}
+
+.remote-status.offline {
+  background: #252a36;
+  color: #717886;
+}
+
+.remote-status .spin {
+  animation: remote-spin 1s linear infinite;
+}
+
+@keyframes remote-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.remote-form {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-width: 420px;
+}
+
+.remote-form input {
+  padding: 10px 12px;
+  border: 1px solid #282d38;
+  border-radius: 8px;
+  background: #171b23;
+  color: white;
+  font-size: 11px;
+  outline: none;
+}
+
+.remote-form input:focus {
+  border-color: #7c3aed;
+}
+
+.remote-error {
+  margin: 8px 0 0;
+  color: #f87171;
+  font-size: 10px;
+}
+
+.remote-help {
+  margin-top: 14px;
+  color: #717886;
+  font-size: 10px;
+}
+
+.remote-help summary {
+  color: #a970ff;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.remote-help ol {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 7px;
+}
+
+.remote-help a {
+  color: #b17aff;
+}
+
+.remote-help code {
+  background: #171b23;
+  border: 1px solid #282d38;
+  border-radius: 4px;
+  padding: 1px 5px;
 }

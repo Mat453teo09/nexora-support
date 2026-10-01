@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   CheckCircle2,
   Inbox,
   LogOut,
@@ -21,6 +22,12 @@ const ALL_NAV_ITEMS = [
   },
   { key: "operators", label: "Operatori", icon: Users, ownerOnly: true },
   { key: "resolved", label: "Risolte", icon: CheckCircle2, ownerOnly: false },
+  {
+    key: "stats",
+    label: "Statistiche",
+    icon: BarChart3,
+    ownerOnly: true,
+  },
   { key: "settings", label: "Impostazioni", icon: Settings, ownerOnly: true },
   {
     key: "profile",

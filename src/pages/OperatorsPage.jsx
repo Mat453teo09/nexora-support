@@ -35,6 +35,7 @@ function OperatorsPage() {
   const [editName, setEditName] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editError, setEditError] = useState("");
+  const [successFeedback, setSuccessFeedback] = useState("");
 
   const operators = users.filter((user) => user.role === "OPERATOR");
 
@@ -54,6 +55,8 @@ function OperatorsPage() {
     }
 
     createOperator({ displayName, username, password: password.trim() });
+
+    setSuccessFeedback(`Operatore "${displayName.trim()}" creato. Comunica tu la password.`);
 
     setDisplayName("");
     setUsername("");
@@ -128,6 +131,8 @@ function OperatorsPage() {
           <span>OWNER • Accesso completo</span>
         </div>
       </div>
+
+      {successFeedback && <div className="form-success">{successFeedback}</div>}
 
       {showForm && (
         <form className="operator-form" onSubmit={handleSubmit}>
@@ -258,7 +263,7 @@ function OperatorsPage() {
                   </span>
 
                   <div className="operator-credentials">
-                    Password: {operator.password}
+                    Password: nascosta (usa la matita per cambiarla)
                   </div>
 
                   <div className="operator-status">

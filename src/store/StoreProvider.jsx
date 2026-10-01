@@ -1,27 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { dataStore } from "../data/storage";
-import { authenticateUser } from "../utils/auth";
-import { StoreContext } from "./storeContext";
 import { useConversationActions } from "./hooks/useConversationActions";
 import { useConversationsState } from "./hooks/useConversationsState";
+import { useRemoteSync } from "./hooks/useRemoteSync";
 import { useUsersState } from "./hooks/useUsersState";
+import { authenticateUser } from "../utils/auth";
+import { StoreContext } from "./storeContext";
 
 export function StoreProvider({ children }) {
+  /* ==================== DATI LOCALI (con sync tra schede) ==================== */
+
   const {
     users,
     customers,
     createOperator,
     toggleOperatorActive,
     deleteOperator,
-    updateStaffProfile,
     setOperatorOnline,
+    updateStaffProfile,
     registerCustomer,
+    applyUsers,
+    applyCustomers,
+    applyPresence,
   } = useUsersState();
 
   const [conversations, setConversations] = useConversationsState();
 
-  const conversationActions = useConversationActions(setConversations);
+  /* ==================== SESSIONI ==================== */
 
   const [session, setSession] = useState(() => dataStore.loadSession());
   const [clientSession, setClientSession] = useState(() =>
@@ -43,6 +49,51 @@ export function StoreProvider({ children }) {
       dataStore.clearClientSession();
     }
   }, [clientSession]);
+
+  /* ==================== SYNC MULTI-DISPOSITIVO ==================== */
+
+  /* Applica uno stato remoto+locale unito: conversazioni sempre,
+     utenti e clienti solo se il remote li contiene (evita che l'heartbeat
+     di presenza resetti utenti/clienti non ancora scaricati). */
+  const applyRemote = useCallback(
+    (merged) => {
+      setConversations(merged.conversations);
+
+      if (Array.isArray(merged.users) && merged.users.length > 0) {
+        applyUsers(merged.users);
+      }
+
+      if (Array.isArray(merged.customers)) {
+        applyCustomers(merged.customers);
+      }
+    },
+    [setConversations, applyUsers, applyCustomers],
+  );
+
+  /* Solo presenza (dal polling): non tocca conversazioni/utenti/clienti,
+     così non può sovrascrivere dati appena sincronizzati. */
+  const applyRemotePresence = useCallback(
+    (presence) => applyPresence(presence),
+    [applyPresence],
+  );
+
+  const {
+    remoteConfig,
+    remoteStatus,
+    remoteError,
+    lastSyncAt,
+    connect: connectRemoteBase,
+    disconnect: disconnectRemote,
+  } = useRemoteSync({
+    users,
+    customers,
+    conversations,
+    session,
+    applyRemote,
+    applyRemotePresence,
+  });
+
+  /* ==================== AZIONI ==================== */
 
   const login = useCallback(
     (username, password) => authenticateUser(users, username, password),
@@ -77,6 +128,16 @@ export function StoreProvider({ children }) {
 
   const logoutClient = useCallback(() => setClientSession(null), []);
 
+  const conversationActions = useConversationActions(setConversations);
+
+  /* Il connect vero passa anche l'utente corrente per l'heartbeat. */
+  const connect = useCallback(
+    async (config) => connectRemoteBase(config),
+    [connectRemoteBase],
+  );
+
+  /* ==================== CONTESTO ==================== */
+
   const value = useMemo(
     () => ({
       users,
@@ -84,6 +145,12 @@ export function StoreProvider({ children }) {
       conversations,
       session,
       clientSession,
+      remoteConfig,
+      remoteStatus,
+      remoteError,
+      lastSyncAt,
+      connect,
+      disconnectRemote,
       login,
       startSession,
       logout,
@@ -103,6 +170,12 @@ export function StoreProvider({ children }) {
       conversations,
       session,
       clientSession,
+      remoteConfig,
+      remoteStatus,
+      remoteError,
+      lastSyncAt,
+      connect,
+      disconnectRemote,
       login,
       startSession,
       logout,

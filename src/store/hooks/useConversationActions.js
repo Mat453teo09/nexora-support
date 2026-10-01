@@ -31,6 +31,7 @@ export function useConversationActions(setConversations) {
       updateConversationById(conversationId, (conversation) => ({
         ...conversation,
         status,
+        resolvedAt: status === "resolved" ? Date.now() : null,
       }));
     },
     [updateConversationById],
@@ -41,6 +42,7 @@ export function useConversationActions(setConversations) {
       updateConversationById(conversationId, (conversation) => ({
         ...conversation,
         status: conversation.status === "open" ? "resolved" : "open",
+        resolvedAt: conversation.status === "open" ? Date.now() : null,
       }));
     },
     [updateConversationById],
@@ -61,6 +63,7 @@ export function useConversationActions(setConversations) {
       updateConversationById(conversationId, (conversation) => ({
         ...conversation,
         unread: 0,
+        readAt: Date.now(),
       }));
     },
     [updateConversationById],

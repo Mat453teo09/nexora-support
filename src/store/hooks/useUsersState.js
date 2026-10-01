@@ -10,52 +10,51 @@ import {
   readItem,
   writeItem,
 } from "../../data/storage";
+import { hashPassword } from "../../utils/hash";
 import { normalizePhone } from "../../utils/phone";
+import { PRESENCE_TTL_MS } from "../../data/remoteSync";
 
 /**
- * Password ufficiali degli account predefiniti, per id.
- * Se i dati salvati contengono password diverse (dati vecchi),
- * vengono allineate automaticamente SOLO la prima volta: dopo,
- * l'owner è libero di cambiarle dal pannello e restano persistite.
+ * Hash ufficiali degli account predefiniti, per id.
  */
-const SEED_PASSWORDS_BY_ID = Object.fromEntries(
-  [OWNER_ACCOUNT, ...initialOperators].map((user) => [user.id, user.password]),
+const SEED_HASHES_BY_ID = Object.fromEntries(
+  [OWNER_ACCOUNT, ...initialOperators].map((user) => [user.id, user.passwordHash]),
 );
 
-const ALIGN_FLAG_KEY = "nexora_support_passwords_aligned_v1";
+/**
+ * Migrazioni one-time dei dati salvati.
+ */
+const ALIGNED_FLAG = "nexora_support_passwords_aligned_v2";
+const PROD_MIGRATION_FLAG = "nexora_support_prod_migration_v1";
+const LEGACY_PLAINTEXT_FLAG = "nexora_support_legacy_plaintext_v1";
 
-function alignSeedPasswords(users) {
-  if (readItem(ALIGN_FLAG_KEY)) return users;
-
-  let changed = false;
+/**
+ * Converte i dati vecchi (password in chiaro o vecchi hash senza hash uniforme)
+ * al formato attuale: passwordHash per tutti gli account predefiniti.
+ */
+function migrateUsers(users) {
+  if (readItem(ALIGNED_FLAG)) return users;
 
   const migrated = users.map((user) => {
-    const officialPassword = SEED_PASSWORDS_BY_ID[user.id];
+    const officialHash = SEED_HASHES_BY_ID[user.id];
 
-    if (officialPassword && user.password !== officialPassword) {
-      changed = true;
-
-      return { ...user, password: officialPassword };
+    if (officialHash && user.passwordHash !== officialHash) {
+      return { ...user, passwordHash: officialHash, password: undefined };
     }
 
     return user;
   });
 
-  writeItem(ALIGN_FLAG_KEY, true);
+  writeItem(ALIGNED_FLAG, true);
 
-  return changed ? migrated : users;
+  return migrated;
 }
 
 /**
- * Migrazione one-time all'aggiornamento "produzione":
- * - tutti gli operatori tornano attivi;
- * - le chat e i clienti demo vengono eliminati.
- * Non tocca gli account creati dall'owner dopo l'installazione.
+ * Migrazione "produzione": operatori tutti attivi, chat e clienti demo eliminati.
  */
-const PROD_MIGRATION_FLAG_KEY = "nexora_support_prod_migration_v1";
-
 function runProdMigration() {
-  if (readItem(PROD_MIGRATION_FLAG_KEY)) return;
+  if (readItem(PROD_MIGRATION_FLAG)) return;
 
   const users = readItem(dataStore.keys.users);
 
@@ -72,7 +71,7 @@ function runProdMigration() {
   dataStore.saveConversations([]);
   dataStore.saveCustomers([]);
 
-  writeItem(PROD_MIGRATION_FLAG_KEY, true);
+  writeItem(PROD_MIGRATION_FLAG, true);
 }
 
 /**
@@ -84,7 +83,7 @@ export function useUsersState() {
   const [users, setUsers] = useState(() => {
     runProdMigration();
 
-    const loaded = alignSeedPasswords(
+    const loaded = migrateUsers(
       dataStore.loadUsers([OWNER_ACCOUNT, ...initialOperators]),
     );
 
@@ -92,11 +91,78 @@ export function useUsersState() {
 
     return loaded;
   });
+
   const [customers, setCustomers] = useState(() =>
     dataStore.loadCustomers(initialCustomers),
   );
 
   const lastSavedUsersRef = useRef(JSON.stringify(users));
+
+  /*
+   * Conversione one-time degli account creati prima dell'introduzione
+   * dell'hash: avevano la password in chiaro nel campo `password`.
+   * La convertiamo in passwordHash senza perdere le credenziali scelte.
+   */
+  useEffect(() => {
+    if (readItem(LEGACY_PLAINTEXT_FLAG)) return undefined;
+
+    let cancelled = false;
+
+    (async () => {
+      const stored = dataStore.loadUsers([OWNER_ACCOUNT, ...initialOperators]);
+
+      const needsConversion = stored.some(
+        (user) =>
+          !SEED_HASHES_BY_ID[user.id] &&
+          !user.passwordHash &&
+          typeof user.password === "string" &&
+          user.password !== "",
+      );
+
+      if (!needsConversion) {
+        writeItem(LEGACY_PLAINTEXT_FLAG, true);
+
+        return;
+      }
+
+      const converted = await Promise.all(
+        stored.map(async (user) => {
+          if (SEED_HASHES_BY_ID[user.id]) {
+            return {
+              ...user,
+              passwordHash: SEED_HASHES_BY_ID[user.id],
+              password: undefined,
+            };
+          }
+
+          if (
+            !user.passwordHash &&
+            typeof user.password === "string" &&
+            user.password !== ""
+          ) {
+            return {
+              ...user,
+              passwordHash: await hashPassword(user.password),
+              password: undefined,
+            };
+          }
+
+          return user;
+        }),
+      );
+
+      if (cancelled) return;
+
+      lastSavedUsersRef.current = JSON.stringify(converted);
+      dataStore.saveUsers(converted);
+      setUsers(converted);
+      writeItem(LEGACY_PLAINTEXT_FLAG, true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     function handleStorage(event) {
@@ -139,7 +205,7 @@ export function useUsersState() {
   );
 
   const createOperator = useCallback(
-    ({ displayName, username, password }) => {
+    async ({ displayName, username, password }) => {
       const base = String(username).trim().toLowerCase().replace(/\s+/g, "");
       let finalUsername = base;
       let suffix = 2;
@@ -153,10 +219,12 @@ export function useUsersState() {
         suffix += 1;
       }
 
+      const passwordHash = await hashPassword(password);
+
       const newUser = {
         id: `operator-${crypto.randomUUID()}`,
         username: finalUsername,
-        password,
+        passwordHash,
         displayName: displayName.trim(),
         role: "OPERATOR",
         active: true,
@@ -197,18 +265,22 @@ export function useUsersState() {
 
   /**
    * Aggiorna profilo di un membro dello staff (solo OWNER):
-   * nome visualizzato e/o password.
+   * nome visualizzato e/o password (che viene hashata).
    */
   const updateStaffProfile = useCallback(
-    (userId, { displayName, password }) => {
+    async (userId, { displayName, password }) => {
+      const passwordHash =
+        password !== undefined && password.trim() !== ""
+          ? await hashPassword(password.trim())
+          : undefined;
+
       updateUserById(userId, (user) => ({
         ...user,
         ...(displayName !== undefined &&
           displayName.trim() !== "" && {
             displayName: displayName.trim(),
           }),
-        ...(password !== undefined &&
-          password.trim() !== "" && { password: password.trim() }),
+        ...(passwordHash && { passwordHash }),
       }));
     },
     [updateUserById],
@@ -237,6 +309,71 @@ export function useUsersState() {
     [customers],
   );
 
+  /* Riferimento sempre aggiornato all'ultimo stato utenti (usato da
+     applyPresence per leggere lo stato più recente senza attendere il render). */
+  const usersRef = useRef(users);
+
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
+
+  /**
+   * Applica la presenza remota (chi è online secondo gli heartbeat del cloud)
+   * senza toccare il resto dello stato: legge lo stato utenti più recente
+   * invece dello snapshot del render, così non sovrascrive dati appena
+   * arrivati dalla sincronizzazione.
+   */
+  const applyPresence = useCallback((presence) => {
+    if (!presence || typeof presence !== "object") return;
+
+    const now = Date.now();
+    let changed = false;
+
+    const next = usersRef.current.map((user) => {
+      const entry = presence[user.id];
+
+      if (!entry) return user;
+
+      const fresh =
+        Boolean(entry.online) && now - entry.lastSeen < PRESENCE_TTL_MS;
+
+      if (fresh === user.online) return user;
+
+      changed = true;
+
+      return { ...user, online: fresh };
+    });
+
+    if (!changed) return;
+
+    usersRef.current = next;
+    lastSavedUsersRef.current = JSON.stringify(next);
+    dataStore.saveUsers(next);
+    setUsers(next);
+  }, []);
+
+  /**
+   * Applica utenti remoti (sync multi-dispositivo): sostituisce lo stato
+   * e lo salva in locale, senza toccare il flag di migrazione.
+   */
+  const applyUsers = useCallback((nextUsers) => {
+    if (!Array.isArray(nextUsers) || nextUsers.length === 0) return;
+
+    lastSavedUsersRef.current = JSON.stringify(nextUsers);
+    dataStore.saveUsers(nextUsers);
+    setUsers(nextUsers);
+  }, []);
+
+  /**
+   * Applica clienti remoti (sync multi-dispositivo), con persistenza.
+   */
+  const applyCustomers = useCallback((nextCustomers) => {
+    if (!Array.isArray(nextCustomers)) return;
+
+    dataStore.saveCustomers(nextCustomers);
+    setCustomers(nextCustomers);
+  }, []);
+
   return {
     users,
     customers,
@@ -246,5 +383,8 @@ export function useUsersState() {
     setOperatorOnline,
     updateStaffProfile,
     registerCustomer,
+    applyUsers,
+    applyCustomers,
+    applyPresence,
   };
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Headset, Lock, Shield, User } from "lucide-react";
 
 import { useStore } from "../store/useStore";
+import { verifyPassword } from "../utils/hash";
 
 function Login({ onLogin, onBack, clientMode = false }) {
   const {
@@ -16,7 +17,7 @@ function Login({ onLogin, onBack, clientMode = false }) {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
 
-  function handleStaffLogin(event) {
+  async function handleStaffLogin(event) {
     event.preventDefault();
 
     // Rilegiamo gli utenti dallo storage: così usano subito nome/password
@@ -31,10 +32,19 @@ function Login({ onLogin, onBack, clientMode = false }) {
         username.trim().toLowerCase(),
     );
 
-    const validPassword = candidate && candidate.password === password;
-    const isActive = candidate && candidate.active !== false;
+    if (!candidate || candidate.active === false) {
+      setError("Username o password non corretti, oppure account disattivato.");
 
-    if (!candidate || !validPassword || !isActive) {
+      return;
+    }
+
+    // Le password sono salvate solo come hash: confrontiamo gli hash.
+    // Fallback per account storici creati prima dell'hash.
+    const ok = candidate.passwordHash
+      ? await verifyPassword(password, candidate.passwordHash)
+      : String(candidate.password ?? "") === password;
+
+    if (!ok) {
       setError("Username o password non corretti, oppure account disattivato.");
 
       return;

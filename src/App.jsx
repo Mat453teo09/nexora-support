@@ -9,6 +9,7 @@ import CustomerPanel from "./components/CustomerPanel";
 import OperatorsPage from "./pages/OperatorsPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
+import StatsPage from "./pages/StatsPage";
 import ClientApp from "./pages/ClientApp";
 import HomePage from "./pages/HomePage";
 import { StoreProvider } from "./store/StoreProvider";
@@ -105,6 +106,7 @@ function AppContent() {
     operators: <OperatorsPage />,
     settings: <SettingsPage />,
     profile: <ProfilePage />,
+    stats: <StatsPage />,
   };
 
   const isManagementPage = Boolean(managementPages[currentPage]);
