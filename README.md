@@ -70,6 +70,7 @@ funziona subito senza configurazioni.
 - Accesso con nome + numero (nessuna password): il cliente viene riconosciuto
   dal numero e ritrova la sua cronologia.
 - Chat stile WhatsApp con lo staff, con nome dell'operatore che risponde.
+- **Allegati**: invia immagini e file (max 4 MB) con anteprima in chat.
 - Se lo staff segna la conversazione come risolta, il cliente lo vede e può
   riaprirla semplicemente scrivendo un altro messaggio.
 
@@ -87,7 +88,8 @@ funziona subito senza configurazioni.
 - Conversazioni: assegnazione (solo OWNER, oppure "Assegna a me" per gli operatori),
   stato aperta/risolta, ricerca per nome/testo/numero, filtri con conteggi,
   badge non letti.
-- Chat: invio messaggi con nome dinamico dall'account loggato.
+- Chat: invio messaggi con nome dinamico dall'account loggato, con allegati
+  (immagini e file fino a 4 MB, anteprima o download dal cloud).
 - Pannello cliente: nome, numero, operatore assegnato, stato e note interne salvate.
 - **Statistiche** (solo OWNER): conversazioni totali/aperte/risolte, messaggi
   scambiati, tempo medio della prima risposta e di risoluzione, performance
@@ -96,17 +98,19 @@ funziona subito senza configurazioni.
 
 ## Sync multi-dispositivo in tempo reale (Supabase)
 
-Senza configurazione l'app funziona in modalità locale (dati nel browser).
-Collegando un progetto **Supabase gratuito** tutte le chat, i clienti, gli
-account e la presenza online diventano condivisi tra **tutti i dispositivi e
-browser in tempo reale**: un cliente scrive dal telefono e lo staff vede il
-messaggio entro pochi secondi, su qualsiasi dispositivo.
+Sul **sito pubblicato la sincronizzazione è già attiva di serie** (le chiavi
+del progetto arrivano dal build): chat, clienti, account e presenza online sono
+condivisi tra **tutti i dispositivi e browser in tempo reale** — un cliente
+scrive dal telefono e lo staff vede il messaggio entro 1-2 secondi, su
+qualsiasi dispositivo, senza configurare nulla. In sviluppo (o per usare un
+progetto Supabase diverso) si collega a mano come descritto sotto.
 
 ### Setup (una volta, 2 minuti)
 
 1. Crea un progetto gratuito su [supabase.com](https://supabase.com).
 2. Nel progetto: **SQL Editor** → incolla il contenuto di `supabase-setup.sql`
-   (crea le tabelle `app_state` e `app_presence` con le policy RLS) → Run.
+   (crea le tabelle `app_state` e `app_presence`, il bucket Storage
+   `nexora-attachments` per gli allegati e le policy RLS) → Run.
 3. **Settings → API**: copia *Project URL* e *anon public key*.
 4. Nell'app: **Impostazioni → Sync multi-dispositivo (cloud)** → incolla URL e
    chiave → **Collega**. La pill mostra lo stato (idle / connessione /
@@ -123,9 +127,13 @@ sviluppo con `scripts/fake-supabase-test.mjs`).
 - Lo stato completo (utenti, clienti, conversazioni) vive in una riga della
   tabella `app_state`; la presenza dello staff nella tabella `app_presence`
   (una riga per utente, senza sovrascritture concorrenti).
-- Ogni modifica locale viene pubblicata sul cloud (push con piccolo ritardo di
-  accumulo); ogni pochi secondi l'app scarica il cloud e lo **fonde** con lo
-  stato locale: i messaggi si uniscono per id, nessuna perdita.
+- Ogni modifica locale viene pubblicata sul cloud (push entro ~0,25s); l'app
+  scarica il cloud con **polling adattivo** (ogni 1,5s quando la scheda è
+  visibile, ogni 10s in background) e lo **fonde** con lo stato locale: i
+  messaggi si uniscono per id, nessuna perdita.
+- Gli **allegati** (immagini e file fino a 4 MB) vivono in Supabase Storage nel
+  bucket pubblico `nexora-attachments`: nei messaggi viaggia solo il link, così
+  la sync resta leggerissima.
 - La presenza usa un heartbeat con scadenza automatica (~2 minuti): chi chiude
   il browser torna offline da solo, anche se la scheda era in background.
 - La chiave anon è pubblica per progetto; l'accesso è regolato dalle policy
