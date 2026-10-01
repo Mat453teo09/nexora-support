@@ -24,7 +24,7 @@ const SEED_HASHES_BY_ID = Object.fromEntries(
 /**
  * Migrazioni one-time dei dati salvati.
  */
-const ALIGNED_FLAG = "nexora_support_passwords_aligned_v2";
+const ALIGNED_FLAG = "nexora_support_passwords_aligned_v3";
 const PROD_MIGRATION_FLAG = "nexora_support_prod_migration_v1";
 const LEGACY_PLAINTEXT_FLAG = "nexora_support_legacy_plaintext_v1";
 
