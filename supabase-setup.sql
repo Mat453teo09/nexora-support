@@ -46,4 +46,18 @@ create policy "nexora_app_presence_access"
   using (true)
   with check (true);
 
+-- Allegati delle chat (immagini e file) su Supabase Storage:
+-- bucket pubblico in lettura, scrittura libera per la chiave anon.
+insert into storage.buckets (id, name, public)
+values ('nexora-attachments', 'nexora-attachments', true)
+on conflict (id) do nothing;
+
+drop policy if exists "nexora_attachments_access" on storage.objects;
+create policy "nexora_attachments_access"
+  on storage.objects
+  for all
+  to anon, authenticated
+  using (bucket_id = 'nexora-attachments')
+  with check (bucket_id = 'nexora-attachments');
+
 -- Fatto! Torna nel pannello NEXORA → Impostazioni → "Collega cloud".

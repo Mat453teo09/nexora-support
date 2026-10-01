@@ -7,6 +7,10 @@ import {
   UserCircle,
 } from "lucide-react";
 
+import {
+  AttachmentPicker,
+  AttachmentView,
+} from "./Attachment";
 import { useStore } from "../store/useStore";
 import { getDisplayName, getInitial } from "../utils/display";
 import { formatRelativeDay, formatTime } from "../utils/format";
@@ -16,6 +20,7 @@ function Chat({ conversation, customer, onHighlightProfile }) {
     useStore();
 
   const [draft, setDraft] = useState("");
+  const [pendingAttachment, setPendingAttachment] = useState(null);
 
   if (!conversation || !customer) {
     return (
@@ -47,15 +52,17 @@ function Chat({ conversation, customer, onHighlightProfile }) {
   function handleSend() {
     const text = draft.trim();
 
-    if (!text) return;
+    if (!text && !pendingAttachment) return;
 
     sendStaffMessage(conversation.id, {
       authorId: session.id,
       authorName: operatorDisplayName,
       text,
+      attachment: pendingAttachment ?? undefined,
     });
 
     setDraft("");
+    setPendingAttachment(null);
   }
 
   function handleKeyDown(event) {
@@ -146,7 +153,12 @@ function Chat({ conversation, customer, onHighlightProfile }) {
             <div>
               <div className="message-name">{message.authorName}</div>
 
-              <div className="bubble">{message.text}</div>
+              <div className="bubble">
+                {message.attachment && (
+                  <AttachmentView attachment={message.attachment} />
+                )}
+                {message.text}
+              </div>
 
               <span className="message-time">{formatTime(message.time)}</span>
             </div>
@@ -155,6 +167,25 @@ function Chat({ conversation, customer, onHighlightProfile }) {
       </div>
 
       <div className="message-box">
+        {pendingAttachment && (
+          <div className="pending-attachment">
+            <span>{pendingAttachment.name}</span>
+
+            <button
+              type="button"
+              title="Rimuovi allegato"
+              onClick={() => setPendingAttachment(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <AttachmentPicker
+          conversationId={conversation.id}
+          onUploaded={setPendingAttachment}
+        />
+
         <input
           placeholder="Scrivi un messaggio..."
           value={draft}
@@ -162,7 +193,12 @@ function Chat({ conversation, customer, onHighlightProfile }) {
           onKeyDown={handleKeyDown}
         />
 
-        <button className="send" onClick={handleSend} title="Invia">
+        <button
+          className="send"
+          onClick={handleSend}
+          title="Invia"
+          disabled={!draft.trim() && !pendingAttachment}
+        >
           <Send size={18} />
         </button>
       </div>

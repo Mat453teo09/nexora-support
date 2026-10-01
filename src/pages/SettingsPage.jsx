@@ -119,9 +119,10 @@ function SettingsPage() {
           <h3>Sync multi-dispositivo (cloud)</h3>
 
           <p>
-            Collega un progetto Supabase gratuito per condividere chat,
-            operatori e presenza tra tutti i dispositivi e browser in tempo
-            reale. Senza cloud i dati restano in questo browser.
+            Sul sito pubblicato la sincronizzazione tra tutti i dispositivi e
+            browser è attiva di serie (chat, operatori e presenza in tempo
+            reale). In sviluppo puoi collegare un progetto Supabase diverso:
+            senza cloud i dati restano in questo browser.
           </p>
 
           <div className={`remote-status ${statusInfo.className}`}>

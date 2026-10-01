@@ -60,3 +60,14 @@ export function getLastMessage(conversation) {
 
   return messages.length > 0 ? messages[messages.length - 1] : null;
 }
+
+/** Etichetta compatta per la dimensione di un file ("12 KB", "1,5 MB"). */
+export function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return "";
+
+  if (bytes < 1024) return `${bytes} B`;
+
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

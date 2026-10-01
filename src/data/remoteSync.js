@@ -18,8 +18,30 @@ const REMOTE_CONFIG_KEY = "nexora_support_remote_config";
 
 const STATE_KEY = "app_state";
 
-/** Intervallo di polling in millisecondi (dati e presenza). */
-export const POLL_INTERVAL_MS = 4000;
+/**
+ * Intervallo di polling in millisecondi.
+ *
+ * Con la scheda visibile il polling è molto rapido (i messaggi arrivano
+ * in ~1-2 secondi); in background i browser limitano comunque i timer,
+ * quindi si rallenta per non sprecare richieste.
+ */
+export const POLL_VISIBLE_MS = 1_500;
+export const POLL_HIDDEN_MS = 10_000;
+
+/**
+ * Ritardo di accumulo del push dopo una modifica locale: piccolo per far
+ * viaggiare i messaggi subito, abbastanza da raggruppare le modifiche a raffica.
+ */
+export const PUSH_DEBOUNCE_MS = 250;
+
+/** Intervallo del polling in base alla visibilità della scheda. */
+export function currentPollIntervalMs() {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    return POLL_HIDDEN_MS;
+  }
+
+  return POLL_VISIBLE_MS;
+}
 
 /**
  * La presenza si considera valida fino a questo tempo dall'heartbeat.
@@ -28,6 +50,12 @@ export const POLL_INTERVAL_MS = 4000;
  * meno di un minuto anche con la finestra aperta.
  */
 export const PRESENCE_TTL_MS = 120_000;
+
+/** Dimensione massima di un allegato (limite pratico del piano gratuito). */
+export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+
+/** Bucket Supabase Storage che contiene gli allegati delle chat. */
+export const ATTACHMENTS_BUCKET = "nexora-attachments";
 
 /**
  * Configurazione predefinita da variabili d'ambiente (build pubblicata).
@@ -52,7 +80,18 @@ function envRemoteConfig() {
 export function loadRemoteConfig() {
   const saved = readItem(REMOTE_CONFIG_KEY);
 
-  if (saved && (saved.url || saved.anonKey)) return saved;
+  const savedIsLocalhost =
+    saved && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(saved.url ?? "");
+
+  /* Una config salvata verso localhost non maschera le chiavi incorporate
+     nel sito pubblicato: in produzione vale la config di build. */
+  if (
+    saved &&
+    (saved.url || saved.anonKey) &&
+    !(savedIsLocalhost && !import.meta.env?.DEV)
+  ) {
+    return saved;
+  }
 
   return envRemoteConfig();
 }
@@ -93,6 +132,64 @@ async function supabaseFetch(config, path, options = {}) {
   const text = await response.text();
 
   return text ? JSON.parse(text) : null;
+}
+
+/**
+ * Carica un allegato su Supabase Storage e restituisce i metadati da
+ * salvare nel messaggio (URL pubblico, nome, dimensione, tipo).
+ */
+export async function uploadAttachment(config, { conversationId, file }) {
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error("L'allegato supera il limite di 4 MB.");
+  }
+
+  const extension = (
+    (file.name.split(".").pop() ?? "").match(/^[a-zA-Z0-9]{1,8}$/)
+      ? `.${file.name.split(".").pop().toLowerCase()}`
+      : ""
+  );
+
+  const path = `conv-${conversationId}/${Date.now()}-${crypto
+    .randomUUID()
+    .slice(0, 8)}${extension}`;
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Lettura del file non riuscita"));
+    reader.readAsDataURL(file);
+  });
+
+  const body = await (await fetch(dataUrl)).blob();
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+
+  const response = await fetch(
+    `${config.url}/storage/v1/object/${ATTACHMENTS_BUCKET}/${encodedPath}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        "Content-Type": file.type || "application/octet-stream",
+        "x-upsert": "true",
+      },
+      body,
+    },
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+
+    throw new Error(`Upload non riuscito (${response.status}): ${text.slice(0, 120)}`);
+  }
+
+  return {
+    url: `${config.url}/storage/v1/object/public/${ATTACHMENTS_BUCKET}/${encodedPath}`,
+    name: file.name,
+    size: file.size,
+    type: file.type || "application/octet-stream",
+  };
 }
 
 /** Scarica lo stato remoto (utenti, clienti, conversazioni). */

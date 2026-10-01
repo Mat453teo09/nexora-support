@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
 
+import {
+  AttachmentPicker,
+  AttachmentView,
+} from "../components/Attachment";
 import { useStore } from "../store/useStore";
 import { formatTime } from "../utils/format";
 
@@ -17,6 +21,7 @@ function ClientApp() {
   } = useStore();
 
   const [draft, setDraft] = useState("");
+  const [pendingAttachment, setPendingAttachment] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -43,15 +48,17 @@ function ClientApp() {
   function handleSend() {
     const text = draft.trim();
 
-    if (!text) return;
+    if (!text && !pendingAttachment) return;
 
     sendCustomerMessage(clientSession.id, {
       senderId: clientSession.id,
       senderName: clientSession.name,
       text,
+      attachment: pendingAttachment ?? undefined,
     });
 
     setDraft("");
+    setPendingAttachment(null);
   }
 
   function handleKeyDown(event) {
@@ -107,6 +114,10 @@ function ClientApp() {
                   <div className="client-bubble-name">{message.authorName}</div>
                 )}
 
+                {message.attachment && (
+                  <AttachmentView attachment={message.attachment} />
+                )}
+
                 <p>{message.text}</p>
 
                 <span className="client-time">{formatTime(message.time)}</span>
@@ -125,6 +136,25 @@ function ClientApp() {
         )}
 
         <div className="client-input-bar">
+          {pendingAttachment && (
+            <div className="pending-attachment">
+              <span>{pendingAttachment.name}</span>
+
+              <button
+                type="button"
+                title="Rimuovi allegato"
+                onClick={() => setPendingAttachment(null)}
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          <AttachmentPicker
+            conversationId={conversation?.id ?? clientSession.id}
+            onUploaded={setPendingAttachment}
+          />
+
           <input
             placeholder={
               isResolved
@@ -136,7 +166,12 @@ function ClientApp() {
             onKeyDown={handleKeyDown}
           />
 
-          <button className="client-send" onClick={handleSend} title="Invia">
+          <button
+            className="client-send"
+            onClick={handleSend}
+            title="Invia"
+            disabled={!draft.trim() && !pendingAttachment}
+          >
             <Send size={18} />
           </button>
         </div>

@@ -70,7 +70,7 @@ export function useConversationActions(setConversations) {
   );
 
   const sendStaffMessage = useCallback(
-    (conversationId, { authorId, authorName, text }) => {
+    (conversationId, { authorId, authorName, text, attachment }) => {
       updateConversationById(conversationId, (conversation) => ({
         ...conversation,
         status: "open",
@@ -82,6 +82,7 @@ export function useConversationActions(setConversations) {
             authorId,
             authorName,
             text,
+            ...(attachment ? { attachment } : {}),
             time: Date.now(),
           },
         ],
@@ -91,7 +92,7 @@ export function useConversationActions(setConversations) {
   );
 
   const sendCustomerMessage = useCallback(
-    (customerId, { senderId, senderName, text }) => {
+    (customerId, { senderId, senderName, text, attachment }) => {
       setConversations((previous) => {
         const existing = previous.find(
           (conversation) => conversation.customerId === customerId,
@@ -103,6 +104,7 @@ export function useConversationActions(setConversations) {
           authorId: senderId,
           authorName: senderName,
           text,
+          ...(attachment ? { attachment: { ...attachment } } : {}),
           time: Date.now(),
         };
 

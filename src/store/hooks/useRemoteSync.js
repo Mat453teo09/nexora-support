@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  POLL_INTERVAL_MS,
+  PUSH_DEBOUNCE_MS,
+  currentPollIntervalMs,
   fetchPresence,
   fetchRemoteState,
   isRemoteConfigured,
@@ -154,7 +155,21 @@ export function useRemoteSync({
 
     run();
 
-    const interval = setInterval(run, POLL_INTERVAL_MS);
+    /* Polling adattivo: ogni ciclo riprogramma l'intervallo in base alla
+       visibilità (1,5s in primo piano, 10s in background). */
+    let timerId = null;
+
+    function schedule() {
+      timerId = setTimeout(async () => {
+        if (cancelled) return;
+
+        await run();
+
+        if (!cancelled) schedule();
+      }, currentPollIntervalMs());
+    }
+
+    schedule();
 
     /* Al ritorno della scheda in primo piano scarica subito lo stato
        aggiornato (senza aspettare il prossimo tick del polling). */
@@ -168,11 +183,11 @@ export function useRemoteSync({
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timerId);
       document.removeEventListener("visibilitychange", onVisible);
     };    }, [config, applyRemote, applyRemotePresence]);
 
-  /* Push debounced: ogni modifica locale raggiunge il cloud. */
+  /* Push debounced: ogni modifica locale raggiunge il cloud in fretta. */
   useEffect(() => {
     if (!isRemoteConfigured(config)) return;
 
@@ -189,7 +204,7 @@ export function useRemoteSync({
         setConnection("error");
         setLastError(String(error?.message ?? error));
       }
-    }, 800);
+    }, PUSH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
   }, [config, users, customers, conversations]);

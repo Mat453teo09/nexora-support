@@ -21,6 +21,51 @@ const SEED_HASHES_BY_ID = Object.fromEntries(
   [OWNER_ACCOUNT, ...initialOperators].map((user) => [user.id, user.passwordHash]),
 );
 
+/** Username → id canonico degli account predefiniti. */
+const CANONICAL_IDS_BY_USERNAME = new Map(
+  [OWNER_ACCOUNT, ...initialOperators].map((user) => [user.username, user.id]),
+);
+
+/**
+ * Elimina i duplicati per username (possono arrivare da dati vecchi con
+ * id diversi uniti dal cloud): per gli account predefiniti vince sempre la
+ * versione con l'id canonico, per i custom la prima con passwordHash.
+ */
+function dedupeUsers(users) {
+  if (!Array.isArray(users) || users.length === 0) return users;
+
+  const indexByUsername = new Map();
+  const result = [];
+
+  users.forEach((user) => {
+    if (!user?.username) return;
+
+    const key = String(user.username).toLowerCase();
+    const canonicalId = CANONICAL_IDS_BY_USERNAME.get(key);
+    const candidate = canonicalId ? { ...user, id: canonicalId } : user;
+    const existingIndex = indexByUsername.get(key);
+
+    if (existingIndex === undefined) {
+      indexByUsername.set(key, result.length);
+      result.push(candidate);
+
+      return;
+    }
+
+    const current = result[existingIndex];
+
+    const preferCandidate =
+      (!current.passwordHash && candidate.passwordHash) ||
+      (canonicalId && current.id !== canonicalId);
+
+    if (preferCandidate) {
+      result[existingIndex] = candidate;
+    }
+  });
+
+  return result;
+}
+
 /**
  * Migrazioni one-time dei dati salvati.
  */
@@ -83,8 +128,8 @@ export function useUsersState() {
   const [users, setUsers] = useState(() => {
     runProdMigration();
 
-    const loaded = migrateUsers(
-      dataStore.loadUsers([OWNER_ACCOUNT, ...initialOperators]),
+    const loaded = dedupeUsers(
+      migrateUsers(dataStore.loadUsers([OWNER_ACCOUNT, ...initialOperators])),
     );
 
     dataStore.saveUsers(loaded);
@@ -359,9 +404,11 @@ export function useUsersState() {
   const applyUsers = useCallback((nextUsers) => {
     if (!Array.isArray(nextUsers) || nextUsers.length === 0) return;
 
-    lastSavedUsersRef.current = JSON.stringify(nextUsers);
-    dataStore.saveUsers(nextUsers);
-    setUsers(nextUsers);
+    const deduped = dedupeUsers(nextUsers);
+
+    lastSavedUsersRef.current = JSON.stringify(deduped);
+    dataStore.saveUsers(deduped);
+    setUsers(deduped);
   }, []);
 
   /**

@@ -410,6 +410,7 @@ nav {
 }
 
 .message-box {
+  position: relative;
   margin: 0 20px 18px;
   padding: 9px;
   display: flex;
@@ -447,6 +448,113 @@ nav {
 .send {
   background: #7c3aed;
   color: white;
+}
+
+/* ================= ALLEGATI ================= */
+
+.attach-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #8b93a1;
+  flex-shrink: 0;
+}
+
+.attach-button:hover:not(:disabled) {
+  background: #222835;
+  color: #c8cdd8;
+}
+
+.attach-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pending-attachment {
+  position: absolute;
+  top: -34px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #222835;
+  border: 1px solid #343b49;
+  border-radius: 7px;
+  font-size: 12px;
+  color: #c8cdd8;
+  max-width: 60%;
+}
+
+.pending-attachment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-attachment button {
+  border: 0;
+  background: transparent;
+  color: #8b93a1;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px;
+}
+
+.pending-attachment button:hover {
+  color: #ff7b7b;
+}
+
+.attach-error {
+  color: #ff7b7b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.attachment-image {
+  max-width: min(280px, 100%);
+  max-height: 220px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: zoom-in;
+  display: block;
+}
+
+.attachment-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(124, 58, 237, 0.15);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  border-radius: 8px;
+  color: #c8b7f0;
+  text-decoration: none;
+  font-size: 13px;
+  margin-bottom: 6px;
+  max-width: 280px;
+}
+
+.attachment-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-file em {
+  color: #8b93a1;
+  font-style: normal;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.attachment-file:hover {
+  background: rgba(124, 58, 237, 0.25);
 }
 
 /* ================= CUSTOMER ================= */
@@ -1904,12 +2012,24 @@ button.conversation.selected {
 }
 
 .client-input-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px;
   border-top: 1px solid #242832;
   background: #10131a;
+}
+
+.client-input-bar .attach-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+
+.client-input-bar .pending-attachment {
+  top: -40px;
+  left: 12px;
 }
 
 .client-input-bar input {
