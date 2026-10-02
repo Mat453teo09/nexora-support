@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   CheckCircle2,
   MessageSquare,
@@ -14,7 +14,7 @@ import {
 import { useStore } from "../store/useStore";
 import { getDisplayName, getInitial } from "../utils/display";
 import { formatRelativeDay, formatTime } from "../utils/format";
-import { scrollToBottom } from "../utils/scroll";
+import { useStickyScroll } from "../utils/useStickyScroll";
 
 function Chat({ conversation, customer, onHighlightProfile }) {
   const { session, users, assignConversation, toggleResolved, sendStaffMessage } =
@@ -25,41 +25,12 @@ function Chat({ conversation, customer, onHighlightProfile }) {
 
   const messagesRef = useRef(null);
 
-  useEffect(() => {
-    const container = messagesRef.current;
-
-    scrollToBottom(container);
-
-    const frame = requestAnimationFrame(() => scrollToBottom(container));
-
-    // Le immagini degli allegati arrivano dopo il render: quando caricano,
-    // riportiamo la vista in fondo (solo se l'utente è già vicino ai
-    // messaggi nuovi, così può risalire la cronologia in tranquillità).
-    const images = container ? Array.from(container.querySelectorAll("img")) : [];
-
-    const handleImageLoad = () => {
-      const distanceFromBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight;
-
-      if (distanceFromBottom < 120) {
-        scrollToBottom(container);
-      }
-    };
-
-    images.forEach((image) => {
-      if (!image.complete) {
-        image.addEventListener("load", handleImageLoad, { once: true });
-      }
-    });
-
-    return () => {
-      cancelAnimationFrame(frame);
-
-      images.forEach((image) =>
-        image.removeEventListener("load", handleImageLoad),
-      );
-    };
-  }, [conversation?.id, conversation?.messages.length]);
+  useStickyScroll(
+    messagesRef,
+    conversation
+      ? `${conversation.id}-${conversation.messages.length}`
+      : "empty",
+  );
 
   if (!conversation || !customer) {
     return (
