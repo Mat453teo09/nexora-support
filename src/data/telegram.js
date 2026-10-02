@@ -54,17 +54,19 @@ export function isBotConfigured(config) {
 }
 
 async function sendTelegramMessage(config, chatId, text) {
+  /* Form-encoding di proposito: una richiesta con Content-Type
+     application/json innescherebbe un preflight CORS, che l'API di Telegram
+     rifiuta (501) e il browser bloccherebbe l'invio. Il formato urlencoded
+     è supportato da Telegram ed è una "simple request", senza preflight. */
+  const body = new URLSearchParams({
+    chat_id: String(chatId),
+    text,
+    disable_web_page_preview: "true",
+  });
+
   const response = await fetch(
     `https://api.telegram.org/bot${config.token}/sendMessage`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        disable_web_page_preview: true,
-      }),
-    },
+    { method: "POST", body },
   );
 
   if (!response.ok) {
