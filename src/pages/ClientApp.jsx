@@ -6,6 +6,7 @@ import {
   AttachmentView,
 } from "../components/Attachment";
 import { useStore } from "../store/useStore";
+import { scrollToBottom } from "../utils/scroll";
 import { formatTime } from "../utils/format";
 
 /**
@@ -42,7 +43,15 @@ function ClientApp() {
     .find((message) => message.authorType === "operator");
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Subito senza animazione quando cambiano i messaggi, con una corsa
+    // morbida al frame dopo: funziona uguale anche su Safari.
+    scrollToBottom(messagesEndRef.current);
+
+    const frame = requestAnimationFrame(() => {
+      scrollToBottom(messagesEndRef.current);
+    });
+
+    return () => cancelAnimationFrame(frame);
   }, [messages.length]);
 
   function handleSend() {

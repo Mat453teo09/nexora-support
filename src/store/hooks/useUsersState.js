@@ -11,6 +11,7 @@ import {
   writeItem,
 } from "../../data/storage";
 import { hashPassword } from "../../utils/hash";
+import { uuid } from "../../utils/uuid";
 import { normalizePhone } from "../../utils/phone";
 import { PRESENCE_TTL_MS } from "../../data/remoteSync";
 
@@ -267,7 +268,7 @@ export function useUsersState() {
       const passwordHash = await hashPassword(password);
 
       const newUser = {
-        id: `operator-${crypto.randomUUID()}`,
+        id: `operator-${uuid()}`,
         username: finalUsername,
         passwordHash,
         displayName: displayName.trim(),

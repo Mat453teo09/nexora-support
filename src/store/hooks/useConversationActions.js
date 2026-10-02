@@ -1,5 +1,7 @@
 import { useCallback } from "react";
 
+import { uuid } from "../../utils/uuid";
+
 /**
  * Azioni sulle conversazioni (assegnazione, stato, note, messaggi).
  * Usa il setter condiviso così ogni modifica si propaga alle altre tab.
@@ -77,7 +79,7 @@ export function useConversationActions(setConversations) {
         messages: [
           ...conversation.messages,
           {
-            id: `msg-${crypto.randomUUID()}`,
+            id: `msg-${uuid()}`,
             authorType: "operator",
             authorId,
             authorName,
@@ -99,7 +101,7 @@ export function useConversationActions(setConversations) {
         );
 
         const newMessage = {
-          id: `msg-${crypto.randomUUID()}`,
+          id: `msg-${uuid()}`,
           authorType: "customer",
           authorId: senderId,
           authorName: senderName,
@@ -112,7 +114,7 @@ export function useConversationActions(setConversations) {
           return [
             ...previous,
             {
-              id: `conv-${crypto.randomUUID()}`,
+              id: `conv-${uuid()}`,
               customerId,
               assignedTo: null,
               status: "open",
@@ -151,9 +153,8 @@ export function useConversationActions(setConversations) {
         return [
           ...previous,
           {
-            id: `conv-${crypto.randomUUID()}`,
+            id: `conv-${uuid()}`,
             customerId: customer.id,
-            assignedTo: null,
             status: "open",
             unread: 0,
             notes: "",

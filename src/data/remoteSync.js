@@ -1,4 +1,5 @@
 import { readItem, writeItem } from "./storage";
+import { uuid } from "../utils/uuid";
 
 /**
  * Sincronizzazione multi-dispositivo tramite Supabase (piano gratuito).
@@ -149,9 +150,7 @@ export async function uploadAttachment(config, { conversationId, file }) {
       : ""
   );
 
-  const path = `conv-${conversationId}/${Date.now()}-${crypto
-    .randomUUID()
-    .slice(0, 8)}${extension}`;
+  const path = `conv-${conversationId}/${Date.now()}-${uuid().slice(0, 8)}${extension}`;
 
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   MessageSquare,
@@ -14,6 +14,7 @@ import {
 import { useStore } from "../store/useStore";
 import { getDisplayName, getInitial } from "../utils/display";
 import { formatRelativeDay, formatTime } from "../utils/format";
+import { scrollToBottom } from "../utils/scroll";
 
 function Chat({ conversation, customer, onHighlightProfile }) {
   const { session, users, assignConversation, toggleResolved, sendStaffMessage } =
@@ -21,6 +22,12 @@ function Chat({ conversation, customer, onHighlightProfile }) {
 
   const [draft, setDraft] = useState("");
   const [pendingAttachment, setPendingAttachment] = useState(null);
+
+  const messagesRef = useRef(null);
+
+  useEffect(() => {
+    scrollToBottom(messagesRef.current);
+  }, [conversation?.id, conversation?.messages.length]);
 
   if (!conversation || !customer) {
     return (
@@ -136,7 +143,7 @@ function Chat({ conversation, customer, onHighlightProfile }) {
         </span>
       </div>
 
-      <div className="messages">
+      <div className="messages" ref={messagesRef}>
         {conversation.messages.map((message) => (
           <div
             key={message.id}
