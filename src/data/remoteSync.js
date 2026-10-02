@@ -320,8 +320,14 @@ export function mergeStates(localState, remoteState) {
     (conversation) => conversationLastActivity(conversation) >= clearedAt,
   );
 
+  /* Vale anche per il remoto: una conversazione cancellata non deve mai
+     rientrare nel dispositivo che la scarica dopo. */
+  const remoteConversations = remoteState.conversations.filter(
+    (conversation) => conversationLastActivity(conversation) >= clearedAt,
+  );
+
   const remoteConversationById = new Map(
-    remoteState.conversations.map((item) => [item.id, item]),
+    remoteConversations.map((item) => [item.id, item]),
   );
 
   const conversations = localConversations.map((conversation) => {
@@ -348,7 +354,7 @@ export function mergeStates(localState, remoteState) {
     };
   });
 
-  remoteState.conversations
+  remoteConversations
     .filter(
       (conversation) =>
         !localConversations.some(

@@ -40,6 +40,11 @@ export function useRemoteSync({
   const [lastError, setLastError] = useState(null);
   const [lastSyncAt, setLastSyncAt] = useState(null);
 
+  /* Il push resta bloccato finché non è arrivato il primo stato remoto:
+     pubblicare lo stato locale prima del primo pull sovrascriverebbe il
+     cloud con dati vecchi (es. chat già cancellate da un altro dispositivo). */
+  const [syncReady, setSyncReady] = useState(false);
+
   /* Lo stato visibile è "idle" quando il cloud non è configurato. */
   const configured = isRemoteConfigured(config);
   const status = configured ? connection : "idle";
@@ -187,6 +192,7 @@ export function useRemoteSync({
         setConnection("online");
         setLastError(null);
         setLastSyncAt(Date.now());
+        setSyncReady(true);
       } catch (error) {
         if (!cancelled) {
           setConnection("error");
@@ -233,6 +239,10 @@ export function useRemoteSync({
   useEffect(() => {
     if (!isRemoteConfigured(config)) return;
 
+    /* Il cloud non è ancora stato letto: niente push, altrimenti i dati
+       locali (magari superati) sovrascriverebbero quelli remoti. */
+    if (!syncReady) return;
+
     const serialized = JSON.stringify({
       users,
       customers,
@@ -261,7 +271,7 @@ export function useRemoteSync({
     }, PUSH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [config, users, customers, conversations, clearedAt, bot]);
+  }, [config, syncReady, users, customers, conversations, clearedAt, bot]);
 
   return {
     remoteConfig: config,
