@@ -24,7 +24,7 @@ function ClientApp() {
   const [draft, setDraft] = useState("");
   const [pendingAttachment, setPendingAttachment] = useState(null);
 
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   const conversation = conversations.find(
     (item) => item.customerId === clientSession.id,
@@ -43,15 +43,40 @@ function ClientApp() {
     .find((message) => message.authorType === "operator");
 
   useEffect(() => {
-    // Subito senza animazione quando cambiano i messaggi, con una corsa
-    // morbida al frame dopo: funziona uguale anche su Safari.
-    scrollToBottom(messagesEndRef.current);
+    const container = messagesContainerRef.current;
 
-    const frame = requestAnimationFrame(() => {
-      scrollToBottom(messagesEndRef.current);
+    // Subito e poi al frame dopo: così funziona uguale su tutti i browser.
+    scrollToBottom(container);
+
+    const frame = requestAnimationFrame(() => scrollToBottom(container));
+
+    // Le immagini degli allegati arrivano dopo il render: quando caricano,
+    // riportiamo la vista in fondo (solo se l'utente è già vicino ai
+    // messaggi nuovi, così può risalire la cronologia in tranquillità).
+    const images = container ? Array.from(container.querySelectorAll("img")) : [];
+
+    const handleImageLoad = () => {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+
+      if (distanceFromBottom < 120) {
+        scrollToBottom(container);
+      }
+    };
+
+    images.forEach((image) => {
+      if (!image.complete) {
+        image.addEventListener("load", handleImageLoad, { once: true });
+      }
     });
 
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+
+      images.forEach((image) =>
+        image.removeEventListener("load", handleImageLoad),
+      );
+    };
   }, [messages.length]);
 
   function handleSend() {
@@ -106,7 +131,7 @@ function ClientApp() {
           </button>
         </header>
 
-        <div className="client-messages">
+        <div className="client-messages" ref={messagesContainerRef}>
           <div className="client-system-chip">
             Chat avviata • Un operatore NEXORA ti risponderà qui
           </div>
@@ -133,8 +158,6 @@ function ClientApp() {
               </div>
             </div>
           ))}
-
-          <div ref={messagesEndRef} />
         </div>
 
         {isResolved && (

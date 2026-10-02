@@ -26,7 +26,39 @@ function Chat({ conversation, customer, onHighlightProfile }) {
   const messagesRef = useRef(null);
 
   useEffect(() => {
-    scrollToBottom(messagesRef.current);
+    const container = messagesRef.current;
+
+    scrollToBottom(container);
+
+    const frame = requestAnimationFrame(() => scrollToBottom(container));
+
+    // Le immagini degli allegati arrivano dopo il render: quando caricano,
+    // riportiamo la vista in fondo (solo se l'utente è già vicino ai
+    // messaggi nuovi, così può risalire la cronologia in tranquillità).
+    const images = container ? Array.from(container.querySelectorAll("img")) : [];
+
+    const handleImageLoad = () => {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+
+      if (distanceFromBottom < 120) {
+        scrollToBottom(container);
+      }
+    };
+
+    images.forEach((image) => {
+      if (!image.complete) {
+        image.addEventListener("load", handleImageLoad, { once: true });
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+
+      images.forEach((image) =>
+        image.removeEventListener("load", handleImageLoad),
+      );
+    };
   }, [conversation?.id, conversation?.messages.length]);
 
   if (!conversation || !customer) {
