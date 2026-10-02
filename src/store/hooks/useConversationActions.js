@@ -120,6 +120,7 @@ export function useConversationActions(setConversations) {
               status: "open",
               unread: 1,
               notes: "",
+              createdAt: newMessage.time,
               messages: [newMessage],
             },
           ];
@@ -158,6 +159,7 @@ export function useConversationActions(setConversations) {
             status: "open",
             unread: 0,
             notes: "",
+            createdAt: Date.now(),
             messages: [],
           },
         ];

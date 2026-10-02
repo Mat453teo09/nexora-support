@@ -15,9 +15,12 @@ const KEYS = {
   conversations: `${PREFIX}conversations`,
   session: `${PREFIX}session`,
   clientSession: `${PREFIX}client_session`,
+  chatsClearedAt: `${PREFIX}chats_cleared_at`,
+  botConfig: `${PREFIX}telegram_bot`,
 };
 
 export const storageKeys = KEYS;
+
 
 function isStorageAvailable() {
   try {
@@ -126,6 +129,10 @@ export const dataStore = {
   saveUsers: (users) => writeItem(KEYS.users, users),
   saveCustomers: (customers) => writeItem(KEYS.customers, customers),
   saveConversations: (conversations) => writeItem(KEYS.conversations, conversations),
+  loadChatsClearedAt: () => Number(readItem(KEYS.chatsClearedAt)) || 0,
+  saveChatsClearedAt: (value) => writeItem(KEYS.chatsClearedAt, Number(value) || 0),
+  loadBotConfig: () => readItem(KEYS.botConfig),
+  saveBotConfig: (config) => writeItem(KEYS.botConfig, config),
   loadSession: () => readSessionItem(KEYS.session),
   saveSession: (session) => writeSessionItem(KEYS.session, session),
   clearSession: () => removeSessionItem(KEYS.session),

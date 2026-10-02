@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { dataStore } from "../data/storage";
+import {
+  defaultBotConfig,
+  isBotConfigured,
+  normalizeBotConfig,
+  notifyNewConversation,
+} from "../data/telegram";
 import { useConversationActions } from "./hooks/useConversationActions";
 import { useConversationsState } from "./hooks/useConversationsState";
 import { useRemoteSync } from "./hooks/useRemoteSync";
@@ -26,6 +32,22 @@ export function StoreProvider({ children }) {
   } = useUsersState();
 
   const [conversations, setConversations] = useConversationsState();
+
+  /* Tombstone di cancellazione chat (sincronizzato col cloud) e config bot. */
+  const [chatsClearedAt, setChatsClearedAt] = useState(() =>
+    dataStore.loadChatsClearedAt(),
+  );
+  const [botConfig, setBotConfig] = useState(
+    () => normalizeBotConfig(dataStore.loadBotConfig()) ?? defaultBotConfig(),
+  );
+
+  useEffect(() => {
+    dataStore.saveChatsClearedAt(chatsClearedAt);
+  }, [chatsClearedAt]);
+
+  useEffect(() => {
+    dataStore.saveBotConfig(botConfig);
+  }, [botConfig]);
 
   /* ==================== SESSIONI ==================== */
 
@@ -59,6 +81,18 @@ export function StoreProvider({ children }) {
     (merged) => {
       setConversations(merged.conversations);
 
+      if (merged.clearedAt) {
+        setChatsClearedAt((previous) => Math.max(previous, merged.clearedAt));
+      }
+
+      if (merged.bot) {
+        setBotConfig((previous) => {
+          const next = normalizeBotConfig(merged.bot);
+
+          return next?.token ? next : previous;
+        });
+      }
+
       if (Array.isArray(merged.users) && merged.users.length > 0) {
         applyUsers(merged.users);
       }
@@ -84,10 +118,13 @@ export function StoreProvider({ children }) {
     lastSyncAt,
     connect: connectRemoteBase,
     disconnect: disconnectRemote,
+    replaceRemote,
   } = useRemoteSync({
     users,
     customers,
     conversations,
+    clearedAt: chatsClearedAt,
+    bot: botConfig,
     session,
     applyRemote,
     applyRemotePresence,
@@ -130,6 +167,83 @@ export function StoreProvider({ children }) {
 
   const conversationActions = useConversationActions(setConversations);
 
+  /* ==================== NOTIFICHE NUOVA CHAT (BOT) ==================== */
+
+  /* Notifica sequenziale: prima l'owner, poi gli operatori. Non blocca mai
+     l'invio del messaggio del cliente: eventuali errori vengono ignorati. */
+  const notifyNewChat = useCallback(
+    (customer, messageText) => {
+      if (!isBotConfigured(botConfig)) return;
+
+      notifyNewConversation(botConfig, {
+        customerName: customer?.name,
+        customerPhone: customer?.phone,
+        messageText,
+      }).catch(() => {});
+    },
+    [botConfig],
+  );
+
+  /* Wrapper: rileva la creazione di una conversazione e avvisa il bot. */
+  const sendCustomerMessage = useCallback(
+    (customerId, payload) => {
+      const isNewConversation = !conversations.some(
+        (conversation) => conversation.customerId === customerId,
+      );
+
+      conversationActions.sendCustomerMessage(customerId, payload);
+
+      if (isNewConversation) {
+        const customer = customers.find((item) => item.id === customerId);
+
+        notifyNewChat(customer, payload?.text);
+      }
+    },
+    [conversations, customers, conversationActions, notifyNewChat],
+  );
+
+  const createConversationForCustomer = useCallback(
+    (customer) => {
+      const isNewConversation = !conversations.some(
+        (conversation) => conversation.customerId === customer.id,
+      );
+
+      conversationActions.createConversationForCustomer(customer);
+
+      if (isNewConversation) {
+        notifyNewChat(customer);
+      }
+    },
+    [conversations, conversationActions, notifyNewChat],
+  );
+
+  /** Configura il bot Telegram (Impostazioni owner). */
+  const updateBotConfig = useCallback((config) => {
+    setBotConfig(normalizeBotConfig(config) ?? defaultBotConfig());
+  }, []);
+
+  /**
+   * Cancella tutte le chat: azzera le conversazioni locali, scrive subito
+   * lo stato vuoto sul cloud e tramite il tombstone le rimuove anche dagli
+   * altri dispositivi (clienti e operatori restano intatti).
+   */
+  const clearAllConversations = useCallback(async () => {
+    const clearedAtNow = Date.now();
+
+    setChatsClearedAt(clearedAtNow);
+    setConversations([]);
+
+    const result = await replaceRemote({
+      users,
+      customers,
+      conversations: [],
+      clearedAt: clearedAtNow,
+      bot: botConfig,
+    });
+
+    return result;
+  }, [users, customers, botConfig, setConversations, replaceRemote]);
+
   /* Il connect vero passa anche l'utente corrente per l'heartbeat. */
   const connect = useCallback(
     async (config) => connectRemoteBase(config),
@@ -162,7 +276,13 @@ export function StoreProvider({ children }) {
       deleteOperator,
       setOperatorOnline,
       updateStaffProfile,
+      chatsClearedAt,
+      botConfig,
+      updateBotConfig,
+      clearAllConversations,
       ...conversationActions,
+      sendCustomerMessage,
+      createConversationForCustomer,
     }),
     [
       users,
@@ -187,7 +307,13 @@ export function StoreProvider({ children }) {
       deleteOperator,
       setOperatorOnline,
       updateStaffProfile,
+      chatsClearedAt,
+      botConfig,
+      updateBotConfig,
+      clearAllConversations,
       conversationActions,
+      sendCustomerMessage,
+      createConversationForCustomer,
     ],
   );
 

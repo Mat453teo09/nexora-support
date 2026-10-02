@@ -1,18 +1,22 @@
 import { useState } from "react";
 import {
+  Bell,
   CheckCircle2,
   Cloud,
   CloudOff,
   Loader2,
   MessageSquare,
   RefreshCw,
+  Send,
   Shield,
+  Trash2,
   Users,
 } from "lucide-react";
 
 import { useStore } from "../store/useStore";
 import { OWNER_DISPLAY_NAME } from "../data/owner";
 import { storageKeys } from "../data/storage";
+import { notifyNewConversation } from "../data/telegram";
 
 function formatSyncTime(timestamp) {
   if (!timestamp) return "";
@@ -41,12 +45,27 @@ function SettingsPage() {
     lastSyncAt,
     connect,
     disconnectRemote,
+    botConfig,
+    updateBotConfig,
+    clearAllConversations,
   } = useStore();
 
   const [url, setUrl] = useState(remoteConfig?.url ?? "");
   const [anonKey, setAnonKey] = useState(remoteConfig?.anonKey ?? "");
   const [formError, setFormError] = useState(null);
   const [connecting, setConnecting] = useState(false);
+
+  /* Config bot Telegram. */
+  const [botToken, setBotToken] = useState(botConfig?.token ?? "");
+  const [ownerChatId, setOwnerChatId] = useState(botConfig?.ownerChatId ?? "");
+  const [operatorChatIds, setOperatorChatIds] = useState(
+    (botConfig?.operatorChatIds ?? []).join(", "),
+  );
+  const [botFeedback, setBotFeedback] = useState(null);
+
+  /* Cancellazione chat. */
+  const [clearing, setClearing] = useState(false);
+  const [clearFeedback, setClearFeedback] = useState(null);
 
   const operatorCount = users.filter((user) => user.role === "OPERATOR").length;
 
@@ -84,6 +103,52 @@ function SettingsPage() {
     setAnonKey("");
     setFormError(null);
     disconnectRemote();
+  }
+
+  function handleSaveBot() {
+    updateBotConfig({ token: botToken, ownerChatId, operatorChatIds });
+    setBotFeedback("Salvato. La config viaggia col cloud su tutti i dispositivi.");
+  }
+
+  async function handleTestBot() {
+    setBotFeedback("Invio notifica di prova…");
+
+    const result = await notifyNewConversation(
+      { token: botToken, ownerChatId, operatorChatIds },
+      {
+        customerName: "Prova bot",
+        customerPhone: "+39 000 000 0000",
+        messageText: "Questo è un messaggio di prova del bot NEXORA.",
+      },
+    );
+
+    if (result.skipped) {
+      setBotFeedback("Inserisci il token e almeno una chat id, poi riprova.");
+    } else if (result.sent === 0) {
+      setBotFeedback(`Invio non riuscito: ${result.error ?? "errore sconosciuto"}`);
+    } else {
+      setBotFeedback(`Inviate ${result.sent} notifiche (owner e/o operatori).`);
+    }
+  }
+
+  async function handleClearChats() {
+    const confirmed = window.confirm(
+      "Cancellare TUTTE le conversazioni (anche nel cloud)? Clienti, operatori e account restano intatti.",
+    );
+
+    if (!confirmed) return;
+
+    setClearing(true);
+    setClearFeedback(null);
+
+    const result = await clearAllConversations();
+
+    setClearing(false);
+    setClearFeedback(
+      result?.ok
+        ? "Tutte le chat sono state cancellate."
+        : `Errore durante la cancellazione: ${result?.error ?? "sconosciuto"}`,
+    );
   }
 
   function handleResetData() {
@@ -262,6 +327,85 @@ function SettingsPage() {
           <p>Collegamento WhatsApp (in arrivo)</p>
 
           <strong className="not-connected">Non collegato</strong>
+        </div>
+      </div>
+
+      <div className="settings-card">
+        <div className="settings-icon">
+          <Bell size={22} />
+        </div>
+
+        <div className="remote-body">
+          <h3>Bot notifiche Telegram</h3>
+
+          <p>
+            All'apertura di una nuova chat il bot avvisa prima il telefono
+            dell'owner e poi quello degli operatori. Crea un bot con{" "}
+            <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">
+              @BotFather
+            </a>{" "}
+            e incolla qui il token; per la chat id scrivi al bot e controlla
+            l'id che ti risponde.
+          </p>
+
+          <div className="remote-form">
+            <input
+              type="password"
+              placeholder="Token del bot (123456:ABC-DEF…)"
+              value={botToken}
+              onChange={(event) => setBotToken(event.target.value)}
+            />
+
+            <input
+              type="text"
+              placeholder="Chat id owner (es. 123456789)"
+              value={ownerChatId}
+              onChange={(event) => setOwnerChatId(event.target.value)}
+            />
+
+            <input
+              type="text"
+              placeholder="Chat id operatori, separate da virgola"
+              value={operatorChatIds}
+              onChange={(event) => setOperatorChatIds(event.target.value)}
+            />
+
+            <button className="ghost-button" onClick={handleSaveBot}>
+              <Send size={15} /> Salva config bot
+            </button>
+
+            <button className="ghost-button" onClick={handleTestBot}>
+              Invia notifica di prova
+            </button>
+          </div>
+
+          {botFeedback && <p className="remote-error">{botFeedback}</p>}
+        </div>
+      </div>
+
+      <div className="settings-card">
+        <div className="settings-icon">
+          <Trash2 size={22} />
+        </div>
+
+        <div>
+          <h3>Cancella le chat</h3>
+
+          <p>
+            Svuota <strong>tutte</strong> le conversazioni su questo browser e
+            nel cloud, mantenendo clienti, operatori e account. Utile per
+            ripartire da zero con l'inbox.
+          </p>
+
+          <button
+            className="ghost-button danger"
+            onClick={handleClearChats}
+            disabled={clearing}
+          >
+            {clearing ? "Cancellazione…" : "Cancella tutte le chat"}
+          </button>
+
+          {clearFeedback && <p className="remote-error">{clearFeedback}</p>}
         </div>
       </div>
 

@@ -29,6 +29,8 @@ export function useRemoteSync({
   users,
   customers,
   conversations,
+  clearedAt,
+  bot,
   session,
   applyRemote,
   applyRemotePresence,
@@ -43,16 +45,21 @@ export function useRemoteSync({
   const status = configured ? connection : "idle";
 
   /* Riferimenti sempre aggiornati all'ultimo stato (sincronizzati in effect). */
-  const localRef = useRef({ users, customers, conversations });
+  const localRef = useRef({ users, customers, conversations, clearedAt, bot });
   const sessionRef = useRef(session);
 
   useEffect(() => {
-    localRef.current = { users, customers, conversations };
+    localRef.current = { users, customers, conversations, clearedAt, bot };
     sessionRef.current = session;
   });
 
   const lastRemoteJsonRef = useRef("");
   const lastPushedRef = useRef("");
+
+  /* Alzato durante un push immediato (es. cancellazione chat): il polling
+     non applica stati remoti finché la scrittura non è conclusa, così un
+     vecchio stato in arrivo non riporta in vita dati appena cancellati. */
+  const holdingRef = useRef(false);
 
   const connect = useCallback(
     async (nextConfig) => {
@@ -99,6 +106,38 @@ export function useRemoteSync({
     lastPushedRef.current = "";
   }, []);
 
+  /**
+   * Scrittura immediata dello stato sul cloud, senza attendere il debounce.
+   * Usata dalla cancellazione chat: pubblica subito lo stato vuoto e blocca
+   * il polling finché non è arrivato, evitando che i vecchi dati rimbalzino.
+   */
+  const replaceRemote = useCallback(
+    async (state) => {
+      if (!isRemoteConfigured(config)) return { ok: true, skipped: true };
+
+      holdingRef.current = true;
+
+      try {
+        await pushRemoteState(config, state);
+
+        const json = JSON.stringify(state);
+
+        lastPushedRef.current = json;
+        lastRemoteJsonRef.current = json;
+
+        return { ok: true };
+      } catch (error) {
+        setConnection("error");
+        setLastError(String(error?.message ?? error));
+
+        return { ok: false, error: String(error?.message ?? error) };
+      } finally {
+        holdingRef.current = false;
+      }
+    },
+    [config],
+  );
+
   /* Polling: scarica stato e presenza, pubblica l'heartbeat dello staff. */
   useEffect(() => {
     if (!isRemoteConfigured(config)) {
@@ -108,6 +147,9 @@ export function useRemoteSync({
     let cancelled = false;
 
     async function run() {
+      /* Un push immediato è in corso: non applicare il remoto adesso. */
+      if (holdingRef.current) return;
+
       try {
         const [remote, presence] = await Promise.all([
           fetchRemoteState(config),
@@ -191,7 +233,13 @@ export function useRemoteSync({
   useEffect(() => {
     if (!isRemoteConfigured(config)) return;
 
-    const serialized = JSON.stringify({ users, customers, conversations });
+    const serialized = JSON.stringify({
+      users,
+      customers,
+      conversations,
+      clearedAt,
+      bot,
+    });
 
     if (serialized === lastPushedRef.current) return;
 
@@ -199,7 +247,13 @@ export function useRemoteSync({
       lastPushedRef.current = serialized;
 
       try {
-        await pushRemoteState(config, { users, customers, conversations });
+        await pushRemoteState(config, {
+          users,
+          customers,
+          conversations,
+          clearedAt,
+          bot,
+        });
       } catch (error) {
         setConnection("error");
         setLastError(String(error?.message ?? error));
@@ -207,7 +261,7 @@ export function useRemoteSync({
     }, PUSH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [config, users, customers, conversations]);
+  }, [config, users, customers, conversations, clearedAt, bot]);
 
   return {
     remoteConfig: config,
@@ -216,5 +270,6 @@ export function useRemoteSync({
     lastSyncAt,
     connect,
     disconnect,
+    replaceRemote,
   };
 }

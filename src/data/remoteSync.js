@@ -206,23 +206,46 @@ export async function fetchRemoteState(config) {
     users: Array.isArray(data.users) ? data.users : [],
     customers: Array.isArray(data.customers) ? data.customers : [],
     conversations: Array.isArray(data.conversations) ? data.conversations : [],
+    clearedAt: Number(data.clearedAt) || 0,
+    bot: data.bot && typeof data.bot === "object" ? data.bot : null,
   };
 }
 
 /** Pubblica lo stato locale su Supabase (upsert della riga unica). */
 export async function pushRemoteState(
   config,
-  { users, customers, conversations },
+  { users, customers, conversations, clearedAt = 0, bot = null },
 ) {
   await supabaseFetch(config, "app_state", {
     method: "POST",
     prefer: "resolution=merge-duplicates,return=minimal",
     body: JSON.stringify({
       id: STATE_KEY,
-      data: { users, customers, conversations },
+      data: {
+        users,
+        customers,
+        conversations,
+        clearedAt: Number(clearedAt) || 0,
+        ...(bot ? { bot } : {}),
+      },
       updated_at: new Date().toISOString(),
     }),
   });
+}
+
+/**
+ * Ultima attività di una conversazione: serve al tombstone di cancellazione.
+ * Usa la data di creazione e il timestamp del messaggio più recente.
+ */
+function conversationLastActivity(conversation) {
+  const created = Number(conversation?.createdAt) || 0;
+
+  const lastMessage = (conversation?.messages ?? []).reduce(
+    (max, message) => Math.max(max, Number(message?.time) || 0),
+    0,
+  );
+
+  return Math.max(created, lastMessage);
 }
 
 /**
@@ -284,11 +307,24 @@ export function applyPresenceToUsers(users, presence) {
 export function mergeStates(localState, remoteState) {
   if (!remoteState) return localState;
 
+  /* Tombstone: quando le chat vengono cancellate, clearedAt è il momento
+     della cancellazione. Le conversazioni la cui ultima attività è
+     precedente vengono rimosse anche negli altri dispositivi, così la
+     cancellazione non viene "resuscitata" da chi ha ancora i vecchi dati. */
+  const clearedAt = Math.max(
+    Number(remoteState.clearedAt) || 0,
+    Number(localState.clearedAt) || 0,
+  );
+
+  const localConversations = localState.conversations.filter(
+    (conversation) => conversationLastActivity(conversation) >= clearedAt,
+  );
+
   const remoteConversationById = new Map(
     remoteState.conversations.map((item) => [item.id, item]),
   );
 
-  const conversations = localState.conversations.map((conversation) => {
+  const conversations = localConversations.map((conversation) => {
     const remote = remoteConversationById.get(conversation.id);
 
     if (!remote) return conversation;
@@ -315,7 +351,7 @@ export function mergeStates(localState, remoteState) {
   remoteState.conversations
     .filter(
       (conversation) =>
-        !localState.conversations.some(
+        !localConversations.some(
           (local) => local.id === conversation.id,
         ),
     )
@@ -345,5 +381,11 @@ export function mergeStates(localState, remoteState) {
     .filter((customer) => !customers.some((local) => local.id === customer.id))
     .forEach((customer) => customers.push(customer));
 
-  return { users, customers, conversations };
+  return {
+    users,
+    customers,
+    conversations,
+    clearedAt,
+    bot: remoteState.bot ?? localState.bot ?? null,
+  };
 }
